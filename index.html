@@ -9,13 +9,58 @@
   <style>
     body { font-family: sans-serif; margin: 20px; text-align: center; background: #f5f5f5; color: #333; }
     .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    #camera-view { width: 100%; max-width: 400px; border-radius: 4px; background: #000; transform: scaleX(1); }
+    
+    /* カメラの親要素（位置基準になります） */
+    .camera-wrapper { 
+      position: relative; 
+      width: 100%; 
+      max-width: 400px; 
+      margin: 0 auto; 
+      overflow: hidden; 
+      border-radius: 4px;
+    }
+    #camera-view { width: 100%; background: #000; display: block; }
+    
+    /* ガイド枠（ファインダー）のデザイン */
+    .camera-guide-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none; /* タップイベントなどを邪魔しない */
+    }
+    
+    .finder-box {
+      /* ここが読み取りの目印になる枠線のサイズです */
+      width: 70%;
+      height: 45px;
+      border: 3px solid #00FF00; /* 目立つ緑色の線 */
+      border-radius: 4px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* 枠の外側を暗くする黒魔術 */
+      position: relative;
+    }
+    
+    /* 枠の上に「ここに合わせる」という文字を表示 */
+    .finder-box::before {
+      content: "ここに4桁のコードを合わせる";
+      position: absolute;
+      top: -25px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #00FF00;
+      font-size: 12px;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px #000;
+    }
+
     .input-group { margin: 20px 0; display: flex; gap: 10px; justify-content: center; }
     input { padding: 10px; font-size: 18px; width: 150px; text-align: center; letter-spacing: 2px; text-transform: uppercase; border: 2px solid #ccc; border-radius: 4px; }
     button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button:active { background: #0056b3; }
     .info-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: left; font-size: 14px; color: #666; line-height: 1.6; }
-    .status { font-size: 12px; color: #888; margin-top: 5px; }
+    .status { font-size: 12px; color: #888; margin-top: 10px; }
   </style>
   
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -24,9 +69,16 @@
 
 <div class="container">
   <h2>シリアルコードリーダー</h2>
-  
+
   <!-- カメラ映像を表示する要素 -->
-  <video id="camera-view" autoplay playsinline muted></video>
+  <!-- ガイド枠 -->
+  <div class="camera-wrapper">
+    <video id="camera-view" autoplay playsinline muted></video>
+    <div class="camera-guide-overlay">
+      <div class="finder-box"></div>
+    </div>
+  </div>
+
   <div id="status" class="status">カメラを起動中...</div>
 
   <!-- 読み取り結果とコピーボタン -->

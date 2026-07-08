@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>シリアルコード読み取り</title>
-  
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net;">
+
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net data:;">
+
   <style>
     body { font-family: sans-serif; margin: 20px; text-align: center; background: #f5f5f5; color: #333; }
     .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -43,7 +44,7 @@
     
     /* 枠の上に「ここに合わせる」という文字を表示 */
     .finder-box::before {
-      content: "ここに4桁のコードを合わせる";
+      content: "ここに16桁のコードを合わせる";
       position: absolute;
       top: -25px;
       left: 0;

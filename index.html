@@ -88,13 +88,12 @@
     <button id="copy-btn">コピー</button>
   </div>
 
-  <!-- 要件に基づいた説明文 -->
   <div class="info-section">
     <strong>💡 このアプリについて</strong>
     <ul>
-      <li><strong>外部と通信していない：</strong> 読み取った画像やテキストは、お使いのデバイス（ブラウザ）内だけで安全に処理され、外部のサーバー等に送信されることは一切ありません。</li>
+      <li><strong>外部と通信していない：</strong> 読み取った画像やテキストは、OCR用のライブラリ内で処理され、外部のサーバー等に送信されることはありません。</li>
       <li><strong>シリアルコードを読み込んでコピーするだけ：</strong> カメラにかざして認識されたコードをクリップボードに保存するためだけの単機能ツールです。</li>
-      <li><strong>PCでも携帯でも使える：</strong> Webブラウザが動く環境であれば、パソコンのWebカメラでも、スマートフォンの背面カメラでも同様に動作します。</li>
+      <li><strong>PCでも携帯でも使える：</strong> Webブラウザが動く環境であれば、パソコンのWebカメラでも、スマートフォンの背面カメラでも同様に動作します。Chromeでの利用を想定しています。</li>
     </ul>
   </div>
 </div>
@@ -205,8 +204,6 @@ async function captureAndRecognize() {
       
       // 空白や改行を除去して大文字に整形
       let cleanedText = text.trim().replace(/\s+/g, '').toUpperCase();
-
-      console.log("認識した文字列:" + cleanedText);
 
       // 文章の中から「大文字英数字16桁」の部分だけを自動で探し出す
       const match = cleanedText.match(/[A-Z0-9]{16}/);

@@ -141,9 +141,9 @@
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       video.srcObject = stream;
-      // 映像が始まったら0.3秒ごとに解析ループを回す
+      // 映像が始まったら1秒ごとに解析ループを回す
       video.addEventListener('play', () => {
-        setInterval(captureAndRecognize, 300);
+        setInterval(captureAndRecognize, 1000);
       });
     } catch (err) {
       statusDiv.textContent = "カメラの起動に失敗しました。権限を確認してください。";

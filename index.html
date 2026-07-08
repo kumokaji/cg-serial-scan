@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>シリアルコード読み取り</title>
-
+  
+  <!-- 【セキュリティ】信頼できるCDN（jsdelivr）とインライン処理、ローカルデータのみ通信を許可 -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net data:;">
-
+  
   <style>
     body { font-family: sans-serif; margin: 20px; text-align: center; background: #f5f5f5; color: #333; }
     .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -29,22 +30,20 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      pointer-events: none; /* タップイベントなどを邪魔しない */
+      pointer-events: none;
     }
     
     .finder-box {
-
       width: 70%;
       height: 45px;
       border: 3px solid #00FF00; /* 目立つ緑色の線 */
       border-radius: 4px;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* 枠の外側を暗くするマスク */
       position: relative;
     }
     
-    /* 枠の上に「ここに合わせる」という文字を表示 */
     .finder-box::before {
-      content: "ここに16桁のコードを合わせる";
+      content: "ここにコードを合わせる";
       position: absolute;
       top: -25px;
       left: 0;
@@ -56,12 +55,54 @@
       text-shadow: 1px 1px 2px #000;
     }
 
+    /* アクションボタン（撮影用） */
+    .action-group { margin: 15px 0; }
+    .scan-btn { 
+      padding: 12px 30px; 
+      font-size: 18px; 
+      font-weight: bold; 
+      background: #dc3545; /* 撮影らしく赤色に */
+      color: white; 
+      border: none; 
+      border-radius: 25px; 
+      cursor: pointer; 
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: all 0.2s;
+    }
+    .scan-btn:active { transform: scale(0.95); background: #bd2130; }
+    .scan-btn:disabled { background: #6c757d; cursor: not-allowed; }
+
     .input-group { margin: 20px 0; display: flex; gap: 10px; justify-content: center; }
-    input { padding: 10px; font-size: 18px; width: 240px; text-align: center; letter-spacing: 1px; text-transform: uppercase; border: 2px solid #ccc; border-radius: 4px; font-family: monospace; }
-    button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button:active { background: #0056b3; }
+    
+    /* 入力欄のスタイル（16文字幅・等幅フォント） */
+    input { 
+      padding: 10px; 
+      font-size: 18px; 
+      width: 240px; 
+      text-align: center; 
+      letter-spacing: 1px; 
+      text-transform: uppercase; 
+      border: 2px solid #ccc; 
+      border-radius: 4px; 
+      font-family: monospace; 
+      transition: all 0.3s ease; 
+    }
+
+    /* 読み取り成功時にJavaScriptから付与するクラス（アニメーションなし、色変更のみ） */
+    .success-flash {
+      border-color: #28a745 !important;
+      background-color: #e6ffed !important;
+    }
+
+    .copy-btn { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s ease; }
+    .copy-btn:active { background: #0056b3; }
+    
+    #copy-btn.ready {
+      background-color: #28a745;
+    }
+
     .info-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: left; font-size: 14px; color: #666; line-height: 1.6; }
-    .status { font-size: 12px; color: #888; margin-top: 10px; }
+    .status { font-size: 14px; font-weight: bold; color: #333; margin-top: 10px; height: 20px; }
   </style>
   
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -69,23 +110,28 @@
 <body>
 
 <div class="container">
-  <h2>シリアルコードリーダー</h2>
-
-  <!-- カメラ映像を表示する要素 -->
-  <!-- ガイド枠 -->
+  <h2>シリアルリーダー</h2>
+  
+  <!-- カメラとガイド枠 -->
   <div class="camera-wrapper">
     <video id="camera-view" autoplay playsinline muted></video>
     <div class="camera-guide-overlay">
       <div class="finder-box"></div>
     </div>
   </div>
-
+  
+  <!-- 状態表示メッセージ -->
   <div id="status" class="status">カメラを起動中...</div>
+
+  <!-- シャッターボタン -->
+  <div class="action-group">
+    <button id="scan-btn" class="scan-btn" disabled>コードを読み取る</button>
+  </div>
 
   <!-- 読み取り結果とコピーボタン -->
   <div class="input-group">
-    <input type="text" id="serial-input" readonly placeholder="----" maxlength="16">
-    <button id="copy-btn">コピー</button>
+    <input type="text" id="serial-input" readonly placeholder="----------------" maxlength="16">
+    <button id="copy-btn" class="copy-btn">コピー</button>
   </div>
 
   <div class="info-section">
@@ -103,29 +149,27 @@
   const statusDiv = document.getElementById('status');
   const serialInput = document.getElementById('serial-input');
   const copyBtn = document.getElementById('copy-btn');
+  const scanBtn = document.getElementById('scan-btn');
   
-  const SERIAL_REGEX = /^([A-Z0-9]{16})$/;
+  // 要件: 大文字英数字4桁の正規表現
+  const SERIAL_REGEX = /[A-Z0-9]{4}/;
   let scheduler = null;
-  let isProcessing = false;
 
   // OCRエンジンの初期化
   async function initOCR() {
     statusDiv.textContent = "OCRエンジンを準備中...";
     try {
-
       const worker = await Tesseract.createWorker('eng');
-
-      // 英数字のみ
+      
       await worker.setParameters({
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        // 単一のテキスト行として扱って精度を上げる
-        tessedit_pageseg_mode: '7',
+        tessedit_pageseg_mode: '7' // 単一のテキスト行として解析
       });
       
       scheduler = Tesseract.createScheduler();
       scheduler.addWorker(worker);
 
-      statusDiv.textContent = "カメラにコードを映してください";
+      statusDiv.textContent = "カメラの準備をしています...";
       startCamera();
     } catch (err) {
       statusDiv.textContent = "初期化に失敗しました。ネット接続を確認してください。";
@@ -136,15 +180,15 @@
   // カメラの起動
   async function startCamera() {
     const constraints = {
-      video: { facingMode: { ideal: "environment" } }, // 携帯なら背面、PCなら標準カメラ
+      video: { facingMode: { ideal: "environment" } },
       audio: false
     };
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       video.srcObject = stream;
-      // 映像が始まったら1秒ごとに解析ループを回す
       video.addEventListener('play', () => {
-        setInterval(captureAndRecognize, 1000);
+        statusDiv.textContent = "緑の枠にコードを合わせてボタンを押してください";
+        scanBtn.disabled = false; 
       });
     } catch (err) {
       statusDiv.textContent = "カメラの起動に失敗しました。権限を確認してください。";
@@ -152,108 +196,106 @@
     }
   }
 
-  // 映像をキャプチャして文字認識にかける
-async function captureAndRecognize() {
-    if (isProcessing || !scheduler) return;
-    isProcessing = true;
+  // シャッターボタンが押された時の処理
+  scanBtn.addEventListener('click', async () => {
+    if (!scheduler) return;
 
-    // 1. 実際のビデオの縦横サイズを取得
+    scanBtn.disabled = true;
+    scanBtn.textContent = "解析中...";
+    statusDiv.textContent = "認識処理中。そのまま少しお待ちください...";
+    
+    video.pause();
+
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
-    
-    // ビデオがまだ準備できていない場合はスキップ
-    if (videoWidth === 0 || videoHeight === 0) {
-      isProcessing = false;
-      return;
-    }
 
-    // 2. CSSの「緑の枠（.finder-box）」の割合に合わせて、ビデオ上の切り抜き位置を計算
-    // ※現在のCSS設定：横幅 70%、高さ 45px
-    // 画面中央に配置されているため、それを元に座標（x, y）とサイズ（w, h）を割り出します
     const wrapperWidth = video.clientWidth;
     const wrapperHeight = video.clientHeight;
-
-    // CSS上のファインダーサイズ
     const finderWidthCSS = wrapperWidth * 0.7;
     const finderHeightCSS = 45;
 
-    // 実際のビデオ解像度に対する「倍率」を計算
     const scaleX = videoWidth / wrapperWidth;
     const scaleY = videoHeight / wrapperHeight;
 
-    // ビデオ上で切り抜くべきサイズと座標（中央配置ベース）
     const cropW = finderWidthCSS * scaleX;
     const cropH = finderHeightCSS * scaleY;
     const cropX = (videoWidth - cropW) / 2;
     const cropY = (videoHeight - cropH) / 2;
 
-    // 3. 切り抜いたサイズ専用の隠しCanvasを作成
     const canvas = document.createElement('canvas');
     canvas.width = cropW;
     canvas.height = cropH;
     const ctx = canvas.getContext('2d');
 
-    // 4. ビデオ映像の「指定した枠内だけ」をCanvasに引き伸ばさずに描画
-    ctx.drawImage(
-      video, 
-      cropX, cropY, cropW, cropH,  // 元映像の切り抜き開始位置(x,y) と 範囲(w,h)
-      0, 0, cropW, cropH          // 出力先Canvasの開始位置(x,y) と 範囲(w,h)
-    );
+    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-    // 画像の簡易二値化フィルターで読み取り精度を上げる
+    // 精度向上：白黒ハッキリさせる画像処理（二値化）
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
-      // 輝度（明るさ）を計算
       const brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
-      // しきい値（128）より明るければ白(255)、暗ければ黒(0)にする
-      const v = (brightness > 128) ? 255 : 0;
-      data[i] = v;     // R
-      data[i + 1] = v; // G
-      data[i + 2] = v; // B
+      const v = (brightness > 120) ? 255 : 0; 
+      data[i] = v; data[i + 1] = v; data[i + 2] = v;
     }
     ctx.putImageData(imgData, 0, 0);
 
     try {
-      // 5. 切り抜いた画像だけを文字認識にかける
       const { data: { text } } = await scheduler.addJob('recognize', canvas);
-      
-      // 空白や改行を除去して大文字に整形
       let cleanedText = text.trim().replace(/\s+/g, '').toUpperCase();
 
-      // 文章の中から「大文字英数字16桁」の部分だけを自動で探し出す
-      const match = cleanedText.match(/[A-Z0-9]{16}/);
+      const match = cleanedText.match(SERIAL_REGEX);
 
       if (match) {
         const foundSerial = match[0];
         serialInput.value = foundSerial;
-        statusDiv.textContent = `コード「${foundSerial}」を検出しました！`;
-        serialInput.style.backgroundColor = "#e6ffed"; // 入力欄を薄い緑に
+        statusDiv.textContent = `🎉 コード「${foundSerial}」を検出しました！`;
+        
+        // 色変更のクラスのみを付与（バウンド処理は削除しました）
+        serialInput.classList.add('success-flash');
+        copyBtn.classList.add('ready');
         
         if (navigator.vibrate) navigator.vibrate(50);
+
+        scanBtn.textContent = "もう一度スキャン";
+        scanBtn.disabled = false;
       } else {
-        // 何も検知できなかった場合は入力欄の色を戻す
-        serialInput.style.backgroundColor = "";
-        statusDiv.textContent = "スキャン中...（枠内にコードを合わせてください）";
+        statusDiv.textContent = `コードを認識できませんでした。もう一度お試しください。`;
+        serialInput.value = "";
+        
+        video.play();
+        scanBtn.textContent = "コードを読み取る";
+        scanBtn.disabled = false;
       }
     } catch (error) {
       console.error("認識エラー:", error);
-    } finally {
-      isProcessing = false;
+      statusDiv.textContent = "エラーが発生しました。もう一度お試しください。";
+      video.play();
+      scanBtn.textContent = "コードを読み取る";
+      scanBtn.disabled = false;
     }
-  }
+  });
 
   // クリップボードにコピーするボタンの処理
   copyBtn.addEventListener('click', async () => {
     if (!serialInput.value) {
-      alert("コードが読み取られていません。読み取ってから押してください。");
+      alert("コードが読み取られていません");
       return;
     }
     try {
       await navigator.clipboard.writeText(serialInput.value);
       const originalText = copyBtn.textContent;
       copyBtn.textContent = "コピー済";
-      setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
+      
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+        copyBtn.classList.remove('ready');
+        serialInput.value = "";
+        serialInput.classList.remove('success-flash'); // 次のために緑背景を解除
+        scanBtn.textContent = "コードを読み取る";
+        statusDiv.textContent = "緑の枠にコードを合わせてボタンを押してください";
+        video.play(); 
+      }, 1500);
+      
     } catch (err) {
       alert("コピーに失敗しました");
     }

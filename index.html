@@ -152,31 +152,76 @@
   }
 
   // 映像をキャプチャして文字認識にかける
-  async function captureAndRecognize() {
+async function captureAndRecognize() {
     if (isProcessing || !scheduler) return;
     isProcessing = true;
 
+    // 1. 実際のビデオの縦横サイズを取得
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    
+    // ビデオがまだ準備できていない場合はスキップ
+    if (videoWidth === 0 || videoHeight === 0) {
+      isProcessing = false;
+      return;
+    }
+
+    // 2. CSSの「緑の枠（.finder-box）」の割合に合わせて、ビデオ上の切り抜き位置を計算
+    // ※現在のCSS設定：横幅 70%、高さ 45px
+    // 画面中央に配置されているため、それを元に座標（x, y）とサイズ（w, h）を割り出します
+    const wrapperWidth = video.clientWidth;
+    const wrapperHeight = video.clientHeight;
+
+    // CSS上のファインダーサイズ
+    const finderWidthCSS = wrapperWidth * 0.7;
+    const finderHeightCSS = 45;
+
+    // 実際のビデオ解像度に対する「倍率」を計算
+    const scaleX = videoWidth / wrapperWidth;
+    const scaleY = videoHeight / wrapperHeight;
+
+    // ビデオ上で切り抜くべきサイズと座標（中央配置ベース）
+    const cropW = finderWidthCSS * scaleX;
+    const cropH = finderHeightCSS * scaleY;
+    const cropX = (videoWidth - cropW) / 2;
+    const cropY = (videoHeight - cropH) / 2;
+
+    // 3. 切り抜いたサイズ専用の隠しCanvasを作成
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = cropW;
+    canvas.height = cropH;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // 4. ビデオ映像の「指定した枠内だけ」をCanvasに引き伸ばさずに描画
+    ctx.drawImage(
+      video, 
+      cropX, cropY, cropW, cropH,  // 元映像の切り抜き開始位置(x,y) と 範囲(w,h)
+      0, 0, cropW, cropH          // 出力先Canvasの開始位置(x,y) と 範囲(w,h)
+    );
 
     try {
-      // 文字認識を実行
+      // 5. 切り抜いた画像だけを文字認識にかける
       const { data: { text } } = await scheduler.addJob('recognize', canvas);
+      
       // 空白や改行を除去して大文字に整形
-      const cleanedText = text.trim().replace(/\s+/g, '').toUpperCase();
+      let cleanedText = text.trim().replace(/\s+/g, '').toUpperCase();
 
-      console.log('文字列を認識しました');
-      console.log(cleanedText);
+      console.log("認識した文字列:" + cleanedText);
 
-      if (SERIAL_REGEX.test(cleanedText)) {
-        serialInput.value = cleanedText;
-        statusDiv.textContent = "シリアルコードを検出しました！";
+      // 文章の中から「大文字英数字16桁」の部分だけを自動で探し出す
+      const match = cleanedText.match(/[A-Z0-9]{16}/);
+
+      if (match) {
+        const foundSerial = match[0];
+        serialInput.value = foundSerial;
+        statusDiv.textContent = `コード「${foundSerial}」を検出しました！`;
+        serialInput.style.backgroundColor = "#e6ffed"; // 入力欄を薄い緑に
         
-        // スマホなら短く振動させて通知（対応機種のみ）
         if (navigator.vibrate) navigator.vibrate(50);
+      } else {
+        // 何も検知できなかった場合は入力欄の色を戻す
+        serialInput.style.backgroundColor = "";
+        statusDiv.textContent = "スキャン中...（枠内にコードを合わせてください）";
       }
     } catch (error) {
       console.error("認識エラー:", error);

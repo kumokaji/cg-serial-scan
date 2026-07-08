@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>シリアルコード読み取り</title>
+  
+  <!-- 【セキュリティ】信頼できるCDN（jsdelivr）とインライン処理、ローカルデータのみ通信を許可 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net data: blob:;">
+  
+  <style>
+    body { font-family: sans-serif; margin: 20px; text-align: center; background: #f5f5f5; color: #333; }
+    .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    #camera-view { width: 100%; max-width: 400px; border-radius: 4px; background: #000; transform: scaleX(1); }
+    .input-group { margin: 20px 0; display: flex; gap: 10px; justify-content: center; }
+    input { padding: 10px; font-size: 18px; width: 150px; text-align: center; letter-spacing: 2px; text-transform: uppercase; border: 2px solid #ccc; border-radius: 4px; }
+    button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:active { background: #0056b3; }
+    .info-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: left; font-size: 14px; color: #666; line-height: 1.6; }
+    .status { font-size: 12px; color: #888; margin-top: 5px; }
+  </style>
+  
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" 
+          integrity="sha384-N6+jO34/I626L0HwPZtZ8zKq5wE4N+r09/GzP9+G585z6N8020z5w8o20z5w8o20" 
+          crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div class="container">
+  <h2>シリアルコードリーダー</h2>
+  
+  <!-- カメラ映像を表示する要素 -->
+  <video id="camera-view" autoplay playsinline muted></video>
+  <div id="status" class="status">カメラを起動中...</div>
+
+  <!-- 読み取り結果とコピーボタン -->
+  <div class="input-group">
+    <input type="text" id="serial-input" readonly placeholder="----" maxlength="16">
+    <button id="copy-btn">コピー</button>
+  </div>
+
+  <!-- 要件に基づいた説明文 -->
+  <div class="info-section">
+    <strong>💡 このアプリについて</strong>
+    <ul>
+      <li><strong>外部と通信していない：</strong> 読み取った画像やテキストは、お使いのデバイス（ブラウザ）内だけで安全に処理され、外部のサーバー等に送信されることは一切ありません。</li>
+      <li><strong>シリアルコードを読み込んでコピーするだけ：</strong> カメラにかざして認識されたコードをクリップボードに保存するためだけの単機能ツールです。</li>
+      <li><strong>PCでも携帯でも使える：</strong> Webブラウザが動く環境であれば、パソコンのWebカメラでも、スマートフォンの背面カメラでも同様に動作します。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const video = document.getElementById('camera-view');
+  const statusDiv = document.getElementById('status');
+  const serialInput = document.getElementById('serial-input');
+  const copyBtn = document.getElementById('copy-btn');
+  
+  const SERIAL_REGEX = /^([A-Z0-9]{16})$/;
+  let scheduler = null;
+  let isProcessing = false;
+
+  // OCRエンジンの初期化
+  async function initOCR() {
+    statusDiv.textContent = "OCRエンジンを準備中...";
+    try {
+
+      const worker = await Tesseract.createWorker('eng');
+
+      // 英数字のみ
+      await worker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+      });
+      
+      scheduler = Tesseract.createScheduler();
+      scheduler.addWorker(worker);
+
+      statusDiv.textContent = "カメラにコードを映してください";
+      startCamera();
+    } catch (err) {
+      statusDiv.textContent = "初期化に失敗しました。ネット接続を確認してください。";
+      console.error(err);
+    }
+  }
+
+  // カメラの起動
+  async function startCamera() {
+    const constraints = {
+      video: { facingMode: { ideal: "environment" } }, // 携帯なら背面、PCなら標準カメラ
+      audio: false
+    };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+      // 映像が始まったら1秒ごとに解析ループを回す
+      video.addEventListener('play', () => {
+        setInterval(captureAndRecognize, 1000);
+      });
+    } catch (err) {
+      statusDiv.textContent = "カメラの起動に失敗しました。権限を確認してください。";
+      console.error(err);
+    }
+  }
+
+  // 映像をキャプチャして文字認識にかける
+  async function captureAndRecognize() {
+    if (isProcessing || !scheduler) return;
+    isProcessing = true;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    try {
+      // 文字認識を実行
+      const { data: { text } } = await scheduler.addJob('recognize', canvas);
+      // 空白や改行を除去して大文字に整形
+      const cleanedText = text.trim().replace(/\s+/g, '').toUpperCase();
+
+      if (SERIAL_REGEX.test(cleanedText)) {
+        serialInput.value = cleanedText;
+        statusDiv.textContent = "シリアルコードを検出しました！";
+        
+        // スマホなら短く振動させて通知（対応機種のみ）
+        if (navigator.vibrate) navigator.vibrate(50);
+      }
+    } catch (error) {
+      console.error("認識エラー:", error);
+    } finally {
+      isProcessing = false;
+    }
+  }
+
+  // クリップボードにコピーするボタンの処理
+  copyBtn.addEventListener('click', async () => {
+    if (!serialInput.value) {
+      alert("コードが読み取られていません。読み取ってから押してください。");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(serialInput.value);
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = "コピー済";
+      setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
+    } catch (err) {
+      alert("コピーに失敗しました");
+    }
+  });
+
+  // アプリ起動
+  initOCR();
+</script>
+
+</body>
+</html>

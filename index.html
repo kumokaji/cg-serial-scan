@@ -168,6 +168,9 @@
       // 空白や改行を除去して大文字に整形
       const cleanedText = text.trim().replace(/\s+/g, '').toUpperCase();
 
+      console.log('文字列を認識しました');
+      console.log(cleanedText);
+
       if (SERIAL_REGEX.test(cleanedText)) {
         serialInput.value = cleanedText;
         statusDiv.textContent = "シリアルコードを検出しました！";

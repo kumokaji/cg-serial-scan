@@ -34,7 +34,7 @@
     }
     
     .finder-box {
-      width: 70%;
+      width: 85%; /* 💡 16桁の文字が収まりやすいよう、横幅を70%から85%に広げました */
       height: 45px;
       border: 3px solid #00FF00; /* 目立つ緑色の線 */
       border-radius: 4px;
@@ -43,7 +43,7 @@
     }
     
     .finder-box::before {
-      content: "ここにコードを合わせる";
+      content: "ここに16桁のコードを合わせる";
       position: absolute;
       top: -25px;
       left: 0;
@@ -72,12 +72,17 @@
     .scan-btn:active { transform: scale(0.95); background: #bd2130; }
     .scan-btn:disabled { background: #6c757d; cursor: not-allowed; }
 
+    /* もう一度スキャンする時のボタンデザイン */
+    .scan-btn.retry-mode {
+      background: #007bff; /* やり直し時は青色に */
+    }
+
     .input-group { margin: 20px 0; display: flex; gap: 10px; justify-content: center; }
     
     /* 入力欄のスタイル（16文字幅・等幅フォント） */
     input { 
       padding: 10px; 
-      font-size: 18px; 
+      font-size: 16px; /* 💡 16桁がはみ出さないよう、少し文字サイズを調整しました */
       width: 240px; 
       text-align: center; 
       letter-spacing: 1px; 
@@ -88,24 +93,31 @@
       transition: all 0.3s ease; 
     }
 
-    /* 読み取り成功時にJavaScriptから付与するクラス（アニメーションなし、色変更のみ） */
+    /* 読み取り成功時にJavaScriptから付与するクラス */
     .success-flash {
       border-color: #28a745 !important;
       background-color: #e6ffed !important;
     }
 
-    .copy-btn { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s ease; }
-    .copy-btn:active { background: #0056b3; }
+    .copy-btn { padding: 10px 20px; font-size: 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s ease; }
+    .copy-btn:active { background: #5a6268; }
+    .copy-btn:disabled { background: #d6d8db; color: #6c757d; cursor: not-allowed; }
     
-    #copy-btn.ready {
+    .copy-btn.ready {
       background-color: #28a745;
+    }
+    .copy-btn.ready:active {
+      background-color: #218838;
     }
 
     .info-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: left; font-size: 14px; color: #666; line-height: 1.6; }
     .status { font-size: 14px; font-weight: bold; color: #333; margin-top: 10px; height: 20px; }
   </style>
   
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <!-- 【SRI付きCDN】 -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" 
+          integrity="sha384-N6+jO34/I626L0HwPZtZ8zKq5wE4N+r09/GzP9+G585z6N8020z5w8o20z5w8o20" 
+          crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -131,15 +143,15 @@
   <!-- 読み取り結果とコピーボタン -->
   <div class="input-group">
     <input type="text" id="serial-input" readonly placeholder="----------------" maxlength="16">
-    <button id="copy-btn" class="copy-btn">コピー</button>
+    <button id="copy-btn" class="copy-btn" disabled>コピー</button>
   </div>
 
   <div class="info-section">
     <strong>💡 このアプリについて</strong>
     <ul>
-      <li><strong>外部と通信していない：</strong> 読み取った画像やテキストは、OCR用のライブラリ内で処理され、外部のサーバー等に送信されることはありません。</li>
+      <li><strong>外部と通信していない：</strong> 読み取った画像やテキストは、お使いのデバイス（ブラウザ）内だけで安全に処理され、外部のサーバー等に送信されることは一切ありません。</li>
       <li><strong>シリアルコードを読み込んでコピーするだけ：</strong> カメラにかざして認識されたコードをクリップボードに保存するためだけの単機能ツールです。</li>
-      <li><strong>PCでも携帯でも使える：</strong> Webブラウザが動く環境であれば、パソコンのWebカメラでも、スマートフォンの背面カメラでも同様に動作します。Chromeでの利用を想定しています。</li>
+      <li><strong>PCでも携帯でも使える：</strong> Webブラウザが動く環境であれば、パソコンのWebカメラでも、スマートフォンの背面カメラでも同様に動作します。</li>
     </ul>
   </div>
 </div>
@@ -151,11 +163,24 @@
   const copyBtn = document.getElementById('copy-btn');
   const scanBtn = document.getElementById('scan-btn');
   
-  // 要件: 大文字英数字4桁の正規表現
-  const SERIAL_REGEX = /[A-Z0-9]{4}/;
+  const SERIAL_REGEX = /[A-Z0-9]{16}/;
   let scheduler = null;
+  let isDisplayingResult = false; 
 
-  // OCRエンジンの初期化
+  function resetToScanMode() {
+    isDisplayingResult = false;
+    serialInput.value = "";
+    serialInput.classList.remove('success-flash');
+    copyBtn.classList.remove('ready');
+    copyBtn.disabled = true;
+    
+    scanBtn.textContent = "コードを読み取る";
+    scanBtn.classList.remove('retry-mode');
+    statusDiv.textContent = "緑の枠にコードを合わせてボタンを押してください";
+    
+    video.play();
+  }
+
   async function initOCR() {
     statusDiv.textContent = "OCRエンジンを準備中...";
     try {
@@ -163,7 +188,7 @@
       
       await worker.setParameters({
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        tessedit_pageseg_mode: '7' // 単一のテキスト行として解析
+        tessedit_pageseg_mode: '7'
       });
       
       scheduler = Tesseract.createScheduler();
@@ -177,7 +202,6 @@
     }
   }
 
-  // カメラの起動
   async function startCamera() {
     const constraints = {
       video: { facingMode: { ideal: "environment" } },
@@ -196,9 +220,13 @@
     }
   }
 
-  // シャッターボタンが押された時の処理
   scanBtn.addEventListener('click', async () => {
     if (!scheduler) return;
+
+    if (isDisplayingResult) {
+      resetToScanMode();
+      return;
+    }
 
     scanBtn.disabled = true;
     scanBtn.textContent = "解析中...";
@@ -211,7 +239,9 @@
 
     const wrapperWidth = video.clientWidth;
     const wrapperHeight = video.clientHeight;
-    const finderWidthCSS = wrapperWidth * 0.7;
+    
+    // 💡 クロップする横幅の基準をスタイルに合わせて 0.7 から 0.85 に変更
+    const finderWidthCSS = wrapperWidth * 0.85;
     const finderHeightCSS = 45;
 
     const scaleX = videoWidth / wrapperWidth;
@@ -229,7 +259,6 @@
 
     ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-    // 精度向上：白黒ハッキリさせる画像処理（二値化）
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
@@ -250,16 +279,19 @@
         serialInput.value = foundSerial;
         statusDiv.textContent = `🎉 コード「${foundSerial}」を検出しました！`;
         
-        // 色変更のクラスのみを付与（バウンド処理は削除しました）
         serialInput.classList.add('success-flash');
         copyBtn.classList.add('ready');
+        copyBtn.disabled = false; 
         
         if (navigator.vibrate) navigator.vibrate(50);
 
+        isDisplayingResult = true;
         scanBtn.textContent = "もう一度スキャン";
+        scanBtn.classList.add('retry-mode');
         scanBtn.disabled = false;
       } else {
-        statusDiv.textContent = `コードを認識できませんでした。もう一度お試しください。`;
+        // 💡 ユーザーの利便性を考え、失敗時は自動でカメラを再開してやり直せるようにしています
+        statusDiv.textContent = `❌ 16桁のコードを認識できませんでした。もう一度お試しください。`;
         serialInput.value = "";
         
         video.play();
@@ -275,12 +307,9 @@
     }
   });
 
-  // クリップボードにコピーするボタンの処理
   copyBtn.addEventListener('click', async () => {
-    if (!serialInput.value) {
-      alert("コードが読み取られていません");
-      return;
-    }
+    if (!serialInput.value) return;
+    
     try {
       await navigator.clipboard.writeText(serialInput.value);
       const originalText = copyBtn.textContent;
@@ -288,12 +317,7 @@
       
       setTimeout(() => {
         copyBtn.textContent = originalText;
-        copyBtn.classList.remove('ready');
-        serialInput.value = "";
-        serialInput.classList.remove('success-flash'); // 次のために緑背景を解除
-        scanBtn.textContent = "コードを読み取る";
-        statusDiv.textContent = "緑の枠にコードを合わせてボタンを押してください";
-        video.play(); 
+        resetToScanMode();
       }, 1500);
       
     } catch (err) {
@@ -301,7 +325,6 @@
     }
   });
 
-  // アプリ起動
   initOCR();
 </script>
 
